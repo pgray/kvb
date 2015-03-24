@@ -29,7 +29,7 @@ func loadPage(section string, title string) Page {
 	var body []byte
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(section))
-		body = b.Get([]byte(title))
+		body = append(body, b.Get([]byte(title))...)
 		fmt.Println("Everything worked to here")
 		fmt.Println("Body: ", string(body))
 		return nil
