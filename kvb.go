@@ -25,31 +25,29 @@ func ce(err error) {
 func loadPage(section string, title string) Page {
 	db, err := bolt.Open(DBFILE, 0600, nil)
 	ce(err)
-	// FIGURE OUT CORRECT BODY MEMORY ALLOCATION
 	var body []byte
-	db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(section))
 		body = append(body, b.Get([]byte(title))...)
-		fmt.Println("Everything worked to here")
-		fmt.Println("Body: ", string(body))
 		return nil
 	})
+	ce(err)
 	db.Close()
-	fmt.Println("loadPage body: ", string(body))
 	return Page{Title: title, Body: body}
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func editHandler(w http.ResponseWriter, r *http.Request) {
 	title := "title"
-	//body := "things are ok"
-	//fmt.Println(title)
-	//fmt.Println(body)
-	//p := &Page{Title: title, Body: body}
 	p := loadPage("Main", title)
-	fmt.Println("Loaded the page", p.Title, string(p.Body))
-	fmt.Println(p.Body)
+	t, err := template.ParseFiles("templates/edit.html")
+	ce(err)
+	t.Execute(w, p)
+}
+
+func browseHandler(w http.ResponseWriter, r *http.Request) {
+	title := "title"
+	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/browse.html")
-	fmt.Println("Parsed the template")
 	ce(err)
 	t.Execute(w, p)
 }
@@ -94,6 +92,7 @@ func setDB() {
 
 func main() {
 	setDB()
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/b/", browseHandler)
+	http.HandleFunc("/e/", editHandler)
 	http.ListenAndServe(":8080", nil)
 }
