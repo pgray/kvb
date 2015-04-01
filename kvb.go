@@ -36,11 +36,29 @@ func loadPage(section string, title string) Page {
 	return Page{Title: title, Body: body}
 }
 
+//Pages are saved in a SECTION (bucket) by their TITLE (key) in a BODY (the key's value)
+func savePage(section string, page Page) error {
+	db, err := bolt.Open(DBFILE, 0600, nil)
+	ce(err)
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket := []byte(section)
+		b, err := tx.CreateBucketIfNotExists(bucket)
+		ce(err)
+		err = b.Put([]byte(page.Title), page.Body)
+		ce(err)
+		return nil
+	})
+	ce(err)
+	db.Close()
+	return nil
+}
+
 func editHandler(w http.ResponseWriter, r *http.Request) {
-	title := "title"
+	title := "testing"
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
+	fmt.Println("ran edit")
 	t.Execute(w, p)
 }
 
@@ -49,45 +67,18 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
+	fmt.Println("ran browse")
 	t.Execute(w, p)
 }
 
 func setDB() {
-	db, err := bolt.Open(DBFILE, 0600, nil)
+	testpage := Page{Title: "testing", Body: []byte("this is a test bro")}
+	err := savePage("Main", testpage)
 	ce(err)
-
-	err = db.Update(func(tx *bolt.Tx) error {
-		bucket := []byte("Main")
-		b, err := tx.CreateBucketIfNotExists(bucket)
-		ce(err)
-		title := []byte("title")
-		body := []byte("that was the title")
-		err = b.Put(title, body)
-		ce(err)
-		return nil
-	})
+	err = savePage("Main", Page{"title", []byte("that was the title")})
 	ce(err)
-
-	db.View(func(tx *bolt.Tx) error {
-		title := []byte("title")
-		bucket := []byte("Main")
-		b := tx.Bucket(bucket)
-		titleBack := b.Get(title)
-		fmt.Println("Stored: ", string(titleBack))
-		return nil
-	})
-	ce(err)
-
-	err = db.View(func(tx *bolt.Tx) error {
-		bucket := []byte("Main")
-		title := []byte("title")
-		b := tx.Bucket(bucket)
-		titleBack := b.Get(title)
-		fmt.Println("Body: ", string(titleBack))
-		return nil
-	})
-	ce(err)
-	db.Close()
+	testout := loadPage("Main", "testing")
+	fmt.Println(testout.Title, string(testout.Body))
 }
 
 func main() {
