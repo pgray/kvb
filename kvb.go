@@ -53,8 +53,17 @@ func savePage(section string, page Page) error {
 	return nil
 }
 
+func saveHandler(w http.ResponseWriter, r *http.Request) {
+	body := r.FormValue("body")
+	title := r.URL.Path[6:]
+	fmt.Println(body)
+	fmt.Println(title)
+	savePage("Main", Page{Title: title, Body: []byte(body)})
+	http.Redirect(w, r, "/b/"+title, http.StatusFound)
+}
+
 func editHandler(w http.ResponseWriter, r *http.Request) {
-	title := "testing"
+	title := r.URL.Path[3:]
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
@@ -63,7 +72,8 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func browseHandler(w http.ResponseWriter, r *http.Request) {
-	title := "title"
+	title := r.URL.Path
+	title = title[3:]
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
@@ -83,6 +93,7 @@ func setDB() {
 
 func main() {
 	setDB()
+	http.HandleFunc("/save/", saveHandler)
 	http.HandleFunc("/b/", browseHandler)
 	http.HandleFunc("/e/", editHandler)
 	http.ListenAndServe(":8080", nil)
