@@ -74,6 +74,9 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	title := r.URL.Path
 	title = title[3:]
 	p := loadPage("Main", title)
+	if p.Body == nil {
+		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
+	}
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
 	fmt.Println("browse", title)
