@@ -55,7 +55,7 @@ func savePage(section string, page Page) error {
 
 func saveHandler(w http.ResponseWriter, r *http.Request) {
 	body := r.FormValue("body")
-	title := r.URL.Path[6:]
+	title := r.URL.Path[3:]
 	fmt.Println(body)
 	fmt.Println(title)
 	savePage("Main", Page{Title: title, Body: []byte(body)})
@@ -81,19 +81,8 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	t.Execute(w, p)
 }
 
-func setDB() {
-	testpage := Page{Title: "testing", Body: []byte("this is a test bro")}
-	err := savePage("Main", testpage)
-	ce(err)
-	err = savePage("Main", Page{"title", []byte("that was the title")})
-	ce(err)
-	testout := loadPage("Main", "testing")
-	fmt.Println(testout.Title, string(testout.Body))
-}
-
 func main() {
-	setDB()
-	http.HandleFunc("/save/", saveHandler)
+	http.HandleFunc("/s/", saveHandler)
 	http.HandleFunc("/b/", browseHandler)
 	http.HandleFunc("/e/", editHandler)
 	http.ListenAndServe(":8080", nil)
