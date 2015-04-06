@@ -56,9 +56,8 @@ func savePage(section string, page Page) error {
 func saveHandler(w http.ResponseWriter, r *http.Request) {
 	body := r.FormValue("body")
 	title := r.URL.Path[3:]
-	fmt.Println(body)
-	fmt.Println(title)
 	savePage("Main", Page{Title: title, Body: []byte(body)})
+	fmt.Println("save", title)
 	http.Redirect(w, r, "/b/"+title, http.StatusFound)
 }
 
@@ -67,7 +66,7 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
-	fmt.Println("ran edit")
+	fmt.Println("edit", title)
 	t.Execute(w, p)
 }
 
@@ -77,7 +76,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
-	fmt.Println("ran browse")
+	fmt.Println("browse", title)
 	t.Execute(w, p)
 }
 
