@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"html/template"
@@ -8,7 +9,7 @@ import (
 	"net/http"
 )
 
-var DBFILE = "test.db"
+var DBFILE string
 
 type Page struct {
 	Title string
@@ -82,8 +83,18 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("browse", title)
 	t.Execute(w, p)
 }
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	title := "Root"
+	body := []byte("This is the root of the blog")
+	p := Page{Title: title, Body: body}
+	t, err := template.ParseFiles("templates/browse.html")
+	ce(err)
+	t.Execute(w, p)
+}
 
 func main() {
+	flag.StringVar(&DBFILE, "db", "kvb.db", "specify a .db file")
+	http.HandleFunc("/", browseHandler)
 	http.HandleFunc("/s/", saveHandler)
 	http.HandleFunc("/b/", browseHandler)
 	http.HandleFunc("/e/", editHandler)
