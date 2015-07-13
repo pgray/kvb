@@ -73,7 +73,9 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 
 func browseHandler(w http.ResponseWriter, r *http.Request) {
 	title := r.URL.Path
+	fmt.Println(title)
 	title = title[3:]
+	fmt.Println(title)
 	p := loadPage("Main", title)
 	if p.Body == nil {
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
@@ -84,17 +86,33 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	t.Execute(w, p)
 }
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	title := "Root"
-	body := []byte("This is the root of the blog")
-	p := Page{Title: title, Body: body}
+	title := "root"
+	p := loadPage("root", title)
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
+	fmt.Println(p.Title)
+	fmt.Println(p.Body)
 	t.Execute(w, p)
+}
+func initdb() {
+	db, err := bolt.Open(DBFILE, 0600, nil)
+	ce(err)
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket := []byte("Main")
+		b, err := tx.CreateBucketIfNotExists(bucket)
+		ce(err)
+		err = b.Put([]byte("root"), []byte("This is the root of the blog"))
+		ce(err)
+		return nil
+	})
+	ce(err)
+	db.Close()
 }
 
 func main() {
 	flag.StringVar(&DBFILE, "db", "kvb.db", "specify a .db file")
-	http.HandleFunc("/", browseHandler)
+	initdb()
+	http.HandleFunc("/", rootHandler)
 	http.HandleFunc("/s/", saveHandler)
 	http.HandleFunc("/b/", browseHandler)
 	http.HandleFunc("/e/", editHandler)
