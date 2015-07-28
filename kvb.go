@@ -87,7 +87,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 }
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	title := "root"
-	p := loadPage("root", title)
+	p := loadPage("Main", title)
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
 	fmt.Println(p.Title)
