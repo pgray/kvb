@@ -116,5 +116,6 @@ func main() {
 	http.HandleFunc("/s/", saveHandler)
 	http.HandleFunc("/b/", browseHandler)
 	http.HandleFunc("/e/", editHandler)
+	fmt.Println("Server starting on port 8080 with database file", DBFILE)
 	http.ListenAndServe(":8080", nil)
 }
