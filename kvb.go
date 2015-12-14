@@ -3,13 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/boltdb/bolt"
 	"html/template"
 	"log"
 	"net/http"
+	//	"regexp"
+	"strconv"
+
+	"github.com/boltdb/bolt"
 )
 
+//Flags
 var DBFILE string
+var WPORT int
+var BPORT int
+var BACKUPS bool
+
+//Globals
+var DB *bolt.DB
 
 type Page struct {
 	Title string
@@ -24,24 +34,19 @@ func ce(err error) {
 
 //Sections directly correlate to buckets
 func loadPage(section string, title string) Page {
-	db, err := bolt.Open(DBFILE, 0600, nil)
-	ce(err)
 	var body []byte
-	err = db.View(func(tx *bolt.Tx) error {
+	err := DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(section))
 		body = append(body, b.Get([]byte(title))...)
 		return nil
 	})
 	ce(err)
-	db.Close()
 	return Page{Title: title, Body: body}
 }
 
 //Pages are saved in a SECTION (bucket) by their TITLE (key) in a BODY (the key's value)
 func savePage(section string, page Page) error {
-	db, err := bolt.Open(DBFILE, 0600, nil)
-	ce(err)
-	err = db.Update(func(tx *bolt.Tx) error {
+	err := DB.Update(func(tx *bolt.Tx) error {
 		bucket := []byte(section)
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		ce(err)
@@ -50,54 +55,56 @@ func savePage(section string, page Page) error {
 		return nil
 	})
 	ce(err)
-	db.Close()
 	return nil
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request) {
-	body := r.FormValue("body")
+	section := "Main"
 	title := r.URL.Path[3:]
-	savePage("Main", Page{Title: title, Body: []byte(body)})
-	fmt.Println("save", title)
+
+	body := r.FormValue("body")
+	savePage(section, Page{Title: title, Body: []byte(body)})
+	fmt.Println("save: ", title)
 	http.Redirect(w, r, "/b/"+title, http.StatusFound)
 }
 
 func editHandler(w http.ResponseWriter, r *http.Request) {
+	section := "Main"
 	title := r.URL.Path[3:]
-	p := loadPage("Main", title)
+
+	if title == "" {
+		title = "root"
+	}
+
+	p := loadPage(section, title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
-	fmt.Println("edit", title)
+	fmt.Println("edit: ", section, title)
 	t.Execute(w, p)
 }
 
 func browseHandler(w http.ResponseWriter, r *http.Request) {
-	title := r.URL.Path
-	fmt.Println(title)
-	title = title[3:]
-	fmt.Println(title)
-	p := loadPage("Main", title)
+	section := "Main"
+	title := r.URL.Path[3:]
+	if title == "" {
+		rootHandler(w, r)
+	}
+	p := loadPage(section, title)
 	if p.Body == nil {
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
 	}
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
-	fmt.Println("browse", title)
+	fmt.Println("browse: ", title)
 	t.Execute(w, p)
 }
+
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	title := "root"
-	p := loadPage("Main", title)
-	t, err := template.ParseFiles("templates/browse.html")
-	ce(err)
-	fmt.Println(p.Title)
-	fmt.Println(p.Body)
-	t.Execute(w, p)
+	http.Redirect(w, r, "/b/root", http.StatusFound)
 }
+
 func initdb() {
-	db, err := bolt.Open(DBFILE, 0600, nil)
-	ce(err)
-	err = db.Update(func(tx *bolt.Tx) error {
+	err := DB.Update(func(tx *bolt.Tx) error {
 		bucket := []byte("Main")
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		ce(err)
@@ -106,16 +113,86 @@ func initdb() {
 		return nil
 	})
 	ce(err)
-	db.Close()
+}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	err := DB.View(func(tx *bolt.Tx) error {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="backup.db"`)
+		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+
+		_, err := tx.WriteTo(w)
+		return err
+	})
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+//func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+//  return func (w http.ResponseWriter, *http.Request) {
+//    m = validPath.FindStringSubmatch(r.URL.Path)
+//    if m == nil {
+//      http.NotFound(w, r)
+//      return
+//    }
+//    fn(w, r, m[2])
+//  }
+//}
+
+func readVars() {
+	flag.StringVar(&DBFILE, "database_file", "bolt-kvb.db", "specify a filename for the database (BoltDB: https://github.com/boltdb/bolt)")
+	flag.IntVar(&WPORT, "web_port", 8080, "specify the port to listen on for web connections")
+	flag.IntVar(&BPORT, "backup_port", 8090, "specify the port to listen on for backups of the database file")
+	flag.BoolVar(&BACKUPS, "backups", false, "specify whether the backup port should be enabled (defaults to false)")
+	flag.Parse()
 }
 
 func main() {
-	flag.StringVar(&DBFILE, "db", "kvb.db", "specify a .db file")
+	finish := make(chan bool)
+
+	readVars()
+
+	db, err := bolt.Open(DBFILE, 0600, nil)
+	ce(err)
+	DB = db //Global Pointer
+	defer db.Close()
+
 	initdb()
-	http.HandleFunc("/", rootHandler)
-	http.HandleFunc("/s/", saveHandler)
-	http.HandleFunc("/b/", browseHandler)
-	http.HandleFunc("/e/", editHandler)
-	fmt.Println("Server starting on port 8080 with database file", DBFILE)
-	http.ListenAndServe(":8080", nil)
+
+	webserver := http.NewServeMux()
+	webserver.HandleFunc("/", rootHandler)
+	webserver.HandleFunc("/b/", browseHandler)
+	webserver.HandleFunc("/e/", editHandler)
+	webserver.HandleFunc("/s/", saveHandler)
+
+	backupserver := http.NewServeMux()
+	backupserver.HandleFunc("/backup", backupHandler)
+
+	fmt.Println("Using database file: ", DBFILE)
+
+	go func() {
+		fmt.Println("Web server starting on port: ", WPORT)
+
+		err := http.ListenAndServe(":"+strconv.Itoa(WPORT), webserver)
+
+		if err != nil {
+			log.Fatal("webserver ListenAndServe: ", err)
+		}
+	}()
+
+	if BACKUPS == true {
+		go func() {
+			fmt.Println("Backups available at /backup on port: ", BPORT)
+
+			err := http.ListenAndServe(":"+strconv.Itoa(BPORT), backupserver)
+
+			if err != nil {
+				log.Fatal("backupserver ListenAndServe: ", err)
+			}
+		}()
+	}
+
+	<-finish
 }
