@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/boltdb/bolt"
+	"github.com/russross/blackfriday"
 )
 
 //Flags
@@ -92,11 +93,20 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 	p := loadPage(section, title)
 	if p.Body == nil {
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
+	} else {
+		fmt.Println(string(blackfriday.MarkdownCommon(p.Body)))
 	}
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
 	fmt.Println("browse: ", title)
-	t.Execute(w, p)
+	asdf := struct {
+		Title string
+		Body  template.HTML
+	}{
+		p.Title,
+		template.HTML(blackfriday.MarkdownCommon(p.Body)),
+	}
+	t.Execute(w, asdf)
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
