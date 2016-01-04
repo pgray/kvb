@@ -8,19 +8,27 @@ import (
 	"net/http"
 	//	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/boltdb/bolt"
 	"github.com/russross/blackfriday"
 )
 
+//Globals
+var DB *bolt.DB
+
 //Flags
+type Config struct {
+	dbfile  string
+	wport   int
+	bport   int
+	backups bool
+}
+
 var DBFILE string
 var WPORT int
 var BPORT int
 var BACKUPS bool
-
-//Globals
-var DB *bolt.DB
 
 type Page struct {
 	Title string
@@ -59,20 +67,14 @@ func savePage(section string, page Page) error {
 	return nil
 }
 
-func saveHandler(w http.ResponseWriter, r *http.Request) {
-	section := "Main"
-	title := r.URL.Path[3:]
-
+func saveHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	body := r.FormValue("body")
 	savePage(section, Page{Title: title, Body: []byte(body)})
-	fmt.Println("save: ", title)
-	http.Redirect(w, r, "/b/"+title, http.StatusFound)
+	fmt.Println("save: ", section, title)
+	http.Redirect(w, r, "/b/"+section+"/"+title, http.StatusFound)
 }
 
-func editHandler(w http.ResponseWriter, r *http.Request) {
-	section := "Main"
-	title := r.URL.Path[3:]
-
+func editHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	if title == "" {
 		title = "root"
 	}
@@ -81,24 +83,32 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
 	fmt.Println("edit: ", section, title)
-	t.Execute(w, p)
+	asdf := struct {
+		Section string
+		Title   string
+		Body    []byte
+	}{
+		section,
+		p.Title,
+		p.Body,
+	}
+	t.Execute(w, asdf)
 }
 
-func browseHandler(w http.ResponseWriter, r *http.Request) {
-	section := "Main"
-	title := r.URL.Path[3:]
+func browseHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	if title == "" {
 		rootHandler(w, r)
 	}
+
 	p := loadPage(section, title)
+
 	if p.Body == nil {
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
-	} else {
-		fmt.Println(string(blackfriday.MarkdownCommon(p.Body)))
 	}
+
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
-	fmt.Println("browse: ", title)
+	fmt.Println("browse: ", section, title)
 	asdf := struct {
 		Title string
 		Body  template.HTML
@@ -110,15 +120,17 @@ func browseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/b/root", http.StatusFound)
+	http.Redirect(w, r, "/b/root/root", http.StatusFound)
 }
 
 func initdb() {
+	section := "root"
+	title := "root"
 	err := DB.Update(func(tx *bolt.Tx) error {
-		bucket := []byte("Main")
+		bucket := []byte(section)
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		ce(err)
-		err = b.Put([]byte("root"), []byte("This is the root of the blog"))
+		err = b.Put([]byte(title), []byte("This is the root of the blog"))
 		ce(err)
 		return nil
 	})
@@ -140,16 +152,38 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-//  return func (w http.ResponseWriter, *http.Request) {
-//    m = validPath.FindStringSubmatch(r.URL.Path)
-//    if m == nil {
-//      http.NotFound(w, r)
-//      return
-//    }
-//    fn(w, r, m[2])
-//  }
-//}
+func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Raw Path:", r.URL.Path)
+		path := r.URL.Path
+		path = strings.TrimSpace(path)
+
+		if strings.HasPrefix(path, "/") {
+			path = path[1:]
+		}
+
+		if strings.HasSuffix(path, "/") {
+			cut_off_last_char_len := len(path) - 1
+			path = path[:cut_off_last_char_len]
+		}
+		fmt.Println("Path: ", path)
+
+		m := strings.Split(r.URL.Path, "/")
+		fmt.Println("m: ", m, " m length: ", len(m))
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		if len(m) < 4 {
+			m = append(m, "root")
+			m = append(m, "root")
+			m = append(m, "root")
+		}
+		fmt.Println("m:", m, " m length: ", len(m))
+		fmt.Println(m[2], m[3])
+		fn(w, r, m[2], m[3])
+	}
+}
 
 func readVars() {
 	flag.StringVar(&DBFILE, "database_file", "bolt-kvb.db", "specify a filename for the database (BoltDB: https://github.com/boltdb/bolt)")
@@ -173,9 +207,9 @@ func main() {
 
 	webserver := http.NewServeMux()
 	webserver.HandleFunc("/", rootHandler)
-	webserver.HandleFunc("/b/", browseHandler)
-	webserver.HandleFunc("/e/", editHandler)
-	webserver.HandleFunc("/s/", saveHandler)
+	webserver.HandleFunc("/b/", makeHandler(browseHandler))
+	webserver.HandleFunc("/e/", makeHandler(editHandler))
+	webserver.HandleFunc("/s/", makeHandler(saveHandler))
 
 	backupserver := http.NewServeMux()
 	backupserver.HandleFunc("/backup", backupHandler)
