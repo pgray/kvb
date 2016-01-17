@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <body style="margin-left: auto; margin-right:auto;width:60%;">
-    <h1>EDIT {{.Title}}</h1>
+    <h1>EDIT {{.Section}} / {{.Title}}</h1>
     <form action="/s/{{.Section}}/{{.Title}}" method="POST">
     <div><textarea name="body" rows="30" style="width: 100%;">{{printf "%s" .Body}}</textarea></div>
     <div><input type="submit" value="Save"></div>
