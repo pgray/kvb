@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	//	"regexp"
 	"strconv"
 	"strings"
 
@@ -45,7 +44,11 @@ func ce(err error) {
 func loadPage(section string, title string) Page {
 	var body []byte
 	err := DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(section))
+		bucket := []byte(section)
+		b := tx.Bucket(bucket)
+		if b == nil {
+			return nil
+		}
 		body = append(body, b.Get([]byte(title))...)
 		return nil
 	})
@@ -68,6 +71,7 @@ func savePage(section string, page Page) error {
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
+	fmt.Println("saveHandler: ", section, title)
 	body := r.FormValue("body")
 	savePage(section, Page{Title: title, Body: []byte(body)})
 	fmt.Println("save: ", section, title)
@@ -75,6 +79,7 @@ func saveHandler(w http.ResponseWriter, r *http.Request, section string, title s
 }
 
 func editHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
+	fmt.Println("editHandler: ", section, title)
 	if title == "" {
 		title = "root"
 	}
@@ -82,7 +87,6 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 	p := loadPage(section, title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
-	fmt.Println("edit: ", section, title)
 	asdf := struct {
 		Section string
 		Title   string
@@ -96,6 +100,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 }
 
 func browseHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
+	fmt.Println("browseHandler: ", section, title)
 	if title == "" {
 		rootHandler(w, r)
 	}
@@ -110,9 +115,11 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 	ce(err)
 	fmt.Println("browse: ", section, title)
 	asdf := struct {
-		Title string
-		Body  template.HTML
+		Section string
+		Title   string
+		Body    template.HTML
 	}{
+		section,
 		p.Title,
 		template.HTML(blackfriday.MarkdownCommon(p.Body)),
 	}
@@ -154,7 +161,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Raw Path:", r.URL.Path)
 		path := r.URL.Path
 		path = strings.TrimSpace(path)
 
@@ -166,22 +172,14 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) ht
 			cut_off_last_char_len := len(path) - 1
 			path = path[:cut_off_last_char_len]
 		}
-		fmt.Println("Path: ", path)
 
 		m := strings.Split(r.URL.Path, "/")
-		fmt.Println("m: ", m, " m length: ", len(m))
-		if m == nil {
-			http.NotFound(w, r)
-			return
-		}
+
 		if len(m) < 4 {
-			m = append(m, "root")
-			m = append(m, "root")
-			m = append(m, "root")
+			fn(w, r, m[2], "")
+		} else {
+			fn(w, r, m[2], m[3])
 		}
-		fmt.Println("m:", m, " m length: ", len(m))
-		fmt.Println(m[2], m[3])
-		fn(w, r, m[2], m[3])
 	}
 }
 
