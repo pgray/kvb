@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body style="margin-left: auto;margin-right:auto;width:60%;">
+    <h1>{{ .Section }} Posts:</h1>
+    {{ $section := .Section }}
+    {{ range $value := .Posts }}
+    <a href="{{ $section }}/{{ $value }}">{{ $value }}</a>
+    {{ end }}
+  </body>
+</html>

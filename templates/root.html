@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body style="margin-left: auto;margin-right:auto;width:60%;">
+    <h1>Sections:</h1>
+    {{ range $key, $value := .Sections }}
+    <a href="b/{{ $value }}">{{ $key }} : {{ $value }}</a>
+    {{ end }}
+  </body>
+</html>

@@ -40,6 +40,39 @@ func ce(err error) {
 	}
 }
 
+func sections() []string {
+	var buckets []string
+	err := DB.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+			buckets = append(buckets, string(name))
+			return nil
+		})
+	})
+	ce(err)
+	return buckets
+}
+
+func posts(section string) []string {
+	if section == "" {
+		return []string{""}
+	}
+
+	var keys []string
+	err := DB.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(section))
+		if bucket == nil {
+			return fmt.Errorf("No such bucket")
+		}
+		bucket.ForEach(func(name []byte, _ []byte) error {
+			keys = append(keys, string(name))
+			return nil
+		})
+		return nil
+	})
+	ce(err)
+	return keys
+}
+
 //Sections directly correlate to buckets
 func loadPage(section string, title string) Page {
 	var body []byte
@@ -102,7 +135,19 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 func browseHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	fmt.Println("browseHandler: ", section, title)
 	if title == "" {
-		rootHandler(w, r)
+		t, err := template.ParseFiles("templates/section.html")
+		ce(err)
+		posts := posts(section)
+		fmt.Println("posts: ", posts)
+		asdf := struct {
+			Section string
+			Posts   []string
+		}{
+			section,
+			posts,
+		}
+		t.Execute(w, asdf)
+		return
 	}
 
 	p := loadPage(section, title)
@@ -127,7 +172,15 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/b/root/root", http.StatusFound)
+	t, err := template.ParseFiles("templates/root.html")
+	ce(err)
+	test := sections()
+	asdf := struct {
+		Sections []string
+	}{
+		test,
+	}
+	t.Execute(w, asdf)
 }
 
 func initdb() {
@@ -174,6 +227,7 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) ht
 		}
 
 		m := strings.Split(r.URL.Path, "/")
+		fmt.Println(m)
 
 		if len(m) < 4 {
 			fn(w, r, m[2], "")
@@ -205,6 +259,7 @@ func main() {
 
 	webserver := http.NewServeMux()
 	webserver.HandleFunc("/", rootHandler)
+	webserver.HandleFunc("/b", rootHandler)
 	webserver.HandleFunc("/b/", makeHandler(browseHandler))
 	webserver.HandleFunc("/e/", makeHandler(editHandler))
 	webserver.HandleFunc("/s/", makeHandler(saveHandler))
