@@ -120,7 +120,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 	p := loadPage(section, title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
-	asdf := struct {
+	tempStruct := struct {
 		Section string
 		Title   string
 		Body    []byte
@@ -129,7 +129,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 		p.Title,
 		p.Body,
 	}
-	t.Execute(w, asdf)
+	t.Execute(w, tempStruct)
 }
 
 func browseHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
@@ -139,14 +139,14 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 		ce(err)
 		posts := posts(section)
 		fmt.Println("posts: ", posts)
-		asdf := struct {
+		tempStruct := struct {
 			Section string
 			Posts   []string
 		}{
 			section,
 			posts,
 		}
-		t.Execute(w, asdf)
+		t.Execute(w, tempStruct)
 		return
 	}
 
@@ -159,7 +159,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 	t, err := template.ParseFiles("templates/browse.html")
 	ce(err)
 	fmt.Println("browse: ", section, title)
-	asdf := struct {
+	tempStruct := struct {
 		Section string
 		Title   string
 		Body    template.HTML
@@ -168,19 +168,19 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 		p.Title,
 		template.HTML(blackfriday.MarkdownCommon(p.Body)),
 	}
-	t.Execute(w, asdf)
+	t.Execute(w, tempStruct)
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("templates/root.html")
 	ce(err)
 	test := sections()
-	asdf := struct {
+	tempStruct := struct {
 		Sections []string
 	}{
 		test,
 	}
-	t.Execute(w, asdf)
+	t.Execute(w, tempStruct)
 }
 
 func initdb() {
@@ -237,18 +237,17 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) ht
 	}
 }
 
-func readVars() {
+func init() {
 	flag.StringVar(&DBFILE, "database_file", "bolt-kvb.db", "specify a filename for the database (BoltDB: https://github.com/boltdb/bolt)")
 	flag.IntVar(&WPORT, "web_port", 8080, "specify the port to listen on for web connections")
 	flag.IntVar(&BPORT, "backup_port", 8090, "specify the port to listen on for backups of the database file")
 	flag.BoolVar(&BACKUPS, "backups", false, "specify whether the backup port should be enabled (defaults to false)")
-	flag.Parse()
 }
 
 func main() {
 	finish := make(chan bool)
 
-	readVars()
+	flag.Parse()
 
 	db, err := bolt.Open(DBFILE, 0600, nil)
 	ce(err)
