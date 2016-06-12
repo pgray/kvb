@@ -18,16 +18,13 @@ var DB *bolt.DB
 
 //Flags
 type Config struct {
-	dbfile  string
-	wport   int
-	bport   int
-	backups bool
+	DatabaseFile string
+	WebPort      int
+	BackupPort   int
+	Backups      bool
 }
 
-var DBFILE string
-var WPORT int
-var BPORT int
-var BACKUPS bool
+var config Config
 
 type Page struct {
 	Title string
@@ -238,18 +235,16 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string, string)) ht
 }
 
 func init() {
-	flag.StringVar(&DBFILE, "database_file", "bolt-kvb.db", "specify a filename for the database (BoltDB: https://github.com/boltdb/bolt)")
-	flag.IntVar(&WPORT, "web_port", 8080, "specify the port to listen on for web connections")
-	flag.IntVar(&BPORT, "backup_port", 8090, "specify the port to listen on for backups of the database file")
-	flag.BoolVar(&BACKUPS, "backups", false, "specify whether the backup port should be enabled (defaults to false)")
+	flag.StringVar(&config.DatabaseFile, "database_file", "bolt-kvb.db", "specify a filename for the database")
+	flag.IntVar(&config.WebPort, "web_port", 8080, "specify the port to listen on for web connections")
+	flag.IntVar(&config.BackupPort, "backup_port", 8090, "specify the port to listen on for backups of the database")
+	flag.BoolVar(&config.Backups, "backups", false, "specify whether the backup port should be enabled")
+	flag.Parse()
 }
 
 func main() {
 	finish := make(chan bool)
-
-	flag.Parse()
-
-	db, err := bolt.Open(DBFILE, 0600, nil)
+	db, err := bolt.Open(config.DatabaseFile, 0600, nil)
 	ce(err)
 	DB = db //Global Pointer
 	defer db.Close()
@@ -266,23 +261,23 @@ func main() {
 	backupserver := http.NewServeMux()
 	backupserver.HandleFunc("/backup", backupHandler)
 
-	fmt.Println("Using database file: ", DBFILE)
+	fmt.Println("Using database file: ", config.DatabaseFile)
 
 	go func() {
-		fmt.Println("Web server starting on port: ", WPORT)
+		fmt.Println("Web server starting on port: ", config.WebPort)
 
-		err := http.ListenAndServe(":"+strconv.Itoa(WPORT), webserver)
+		err := http.ListenAndServe(":"+strconv.Itoa(config.WebPort), webserver)
 
 		if err != nil {
 			log.Fatal("webserver ListenAndServe: ", err)
 		}
 	}()
 
-	if BACKUPS == true {
+	if config.Backups == true {
 		go func() {
-			fmt.Println("Backups available at /backup on port: ", BPORT)
+			fmt.Println("Backups available at /backup on port: ", config.BackupPort)
 
-			err := http.ListenAndServe(":"+strconv.Itoa(BPORT), backupserver)
+			err := http.ListenAndServe(":"+strconv.Itoa(config.BackupPort), backupserver)
 
 			if err != nil {
 				log.Fatal("backupserver ListenAndServe: ", err)
