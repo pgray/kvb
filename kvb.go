@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/boltdb/bolt"
+	"github.com/pgray/kvb/db"
 	"github.com/russross/blackfriday"
 )
 
@@ -26,84 +27,16 @@ type Config struct {
 
 var config Config
 
-type Page struct {
-	Title string
-	Body  []byte
-}
-
 func ce(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func sections() []string {
-	var buckets []string
-	err := DB.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
-			buckets = append(buckets, string(name))
-			return nil
-		})
-	})
-	ce(err)
-	return buckets
-}
-
-func posts(section string) []string {
-	if section == "" {
-		return []string{""}
-	}
-
-	var keys []string
-	err := DB.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(section))
-		if bucket == nil {
-			return fmt.Errorf("No such bucket")
-		}
-		bucket.ForEach(func(name []byte, _ []byte) error {
-			keys = append(keys, string(name))
-			return nil
-		})
-		return nil
-	})
-	ce(err)
-	return keys
-}
-
-//Sections directly correlate to buckets
-func loadPage(section string, title string) Page {
-	var body []byte
-	err := DB.View(func(tx *bolt.Tx) error {
-		bucket := []byte(section)
-		b := tx.Bucket(bucket)
-		if b == nil {
-			return nil
-		}
-		body = append(body, b.Get([]byte(title))...)
-		return nil
-	})
-	ce(err)
-	return Page{Title: title, Body: body}
-}
-
-//Pages are saved in a SECTION (bucket) by their TITLE (key) in a BODY (the key's value)
-func savePage(section string, page Page) error {
-	err := DB.Update(func(tx *bolt.Tx) error {
-		bucket := []byte(section)
-		b, err := tx.CreateBucketIfNotExists(bucket)
-		ce(err)
-		err = b.Put([]byte(page.Title), page.Body)
-		ce(err)
-		return nil
-	})
-	ce(err)
-	return nil
-}
-
 func saveHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	fmt.Println("saveHandler: ", section, title)
 	body := r.FormValue("body")
-	savePage(section, Page{Title: title, Body: []byte(body)})
+	db.SavePage(DB, section, db.Page{Title: title, Body: []byte(body)})
 	fmt.Println("save: ", section, title)
 	http.Redirect(w, r, "/b/"+section+"/"+title, http.StatusFound)
 }
@@ -114,7 +47,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 		title = "root"
 	}
 
-	p := loadPage(section, title)
+	p := db.LoadPage(DB, section, title)
 	t, err := template.ParseFiles("templates/edit.html")
 	ce(err)
 	tempStruct := struct {
@@ -134,7 +67,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 	if title == "" {
 		t, err := template.ParseFiles("templates/section.html")
 		ce(err)
-		posts := posts(section)
+		posts := db.Posts(DB, section)
 		fmt.Println("posts: ", posts)
 		tempStruct := struct {
 			Section string
@@ -147,7 +80,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 		return
 	}
 
-	p := loadPage(section, title)
+	p := db.LoadPage(DB, section, title)
 
 	if p.Body == nil {
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
@@ -171,7 +104,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("templates/root.html")
 	ce(err)
-	test := sections()
+	test := db.Sections(DB)
 	tempStruct := struct {
 		Sections []string
 	}{
