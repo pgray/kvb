@@ -10,10 +10,9 @@ RUN apk update && apk add go git \
 
 
 WORKDIR /go/src/github.com/pgray/kvb/
-COPY kvb.go ./
-COPY templates ./templates
+COPY . ./
 
 RUN go get && CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags '-s' kvb.go
 
 EXPOSE 8080
-ENTRYPOINT ["/kvb"]
+ENTRYPOINT ["./kvb"]
