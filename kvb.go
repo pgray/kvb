@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/pgray/kvb/db"
@@ -34,7 +35,7 @@ func ce(err error) {
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
-	fmt.Println("saveHandler: ", section, title)
+	fmt.Println(time.Now(), "saveHandler: ", section, title)
 	body := r.FormValue("body")
 	db.SavePage(DB, section, db.Page{Title: title, Body: []byte(body)})
 	fmt.Println("save: ", section, title)
@@ -48,7 +49,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 	}
 
 	p := db.LoadPage(DB, section, title)
-	t, err := template.ParseFiles("templates/edit.html")
+	t, err := template.New("edit").Parse(editHTML)
 	ce(err)
 	tempStruct := struct {
 		Section string
@@ -65,7 +66,7 @@ func editHandler(w http.ResponseWriter, r *http.Request, section string, title s
 func browseHandler(w http.ResponseWriter, r *http.Request, section string, title string) {
 	fmt.Println("browseHandler: ", section, title)
 	if title == "" {
-		t, err := template.ParseFiles("templates/section.html")
+		t, err := template.New("browse").Parse(sectionHTML)
 		ce(err)
 		posts := db.Posts(DB, section)
 		fmt.Println("posts: ", posts)
@@ -86,7 +87,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 		p.Body = append(p.Body, []byte("Sorry, that page does not exist")...)
 	}
 
-	t, err := template.ParseFiles("templates/browse.html")
+	t, err := template.New("browse").Parse(browseHTML)
 	ce(err)
 	fmt.Println("browse: ", section, title)
 	tempStruct := struct {
@@ -102,7 +103,7 @@ func browseHandler(w http.ResponseWriter, r *http.Request, section string, title
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	t, err := template.ParseFiles("templates/root.html")
+	t, err := template.New("root").Parse(rootHTML)
 	ce(err)
 	test := db.Sections(DB)
 	tempStruct := struct {
